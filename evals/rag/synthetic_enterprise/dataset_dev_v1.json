@@ -1,0 +1,560 @@
+{
+  "cases": [
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_manual.html"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "simple_fact_001",
+      "question": "NX-041 的安装要求是什么？",
+      "reference_answer": "NX-041 的安装要求：断电后接线并固定在 DIN 导轨上。",
+      "required_claims": [
+        "NX-041 的安装要求：断电后接线并固定在 DIN 导轨上。"
+      ],
+      "tags": [
+        "simple_fact",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_faq.html"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "simple_fact_002",
+      "question": "NX-042 的使用环境是什么？",
+      "reference_answer": "NX-042 的使用环境：室内干燥环境，禁止浸水。",
+      "required_claims": [
+        "NX-042 的使用环境：室内干燥环境，禁止浸水。"
+      ],
+      "tags": [
+        "simple_fact",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "technical_specs.html"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "simple_fact_003",
+      "question": "NX-043 的供电要求是什么？",
+      "reference_answer": "NX-043 的供电要求：24 V DC。",
+      "required_claims": [
+        "NX-043 的供电要求：24 V DC。"
+      ],
+      "tags": [
+        "simple_fact",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "troubleshooting.html"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "simple_fact_004",
+      "question": "NX-044 的复位方法是什么？",
+      "reference_answer": "NX-044 的复位方法：断电 30 秒后重新上电。",
+      "required_claims": [
+        "NX-044 的复位方法：断电 30 秒后重新上电。"
+      ],
+      "tags": [
+        "simple_fact",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_manual.html"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "simple_fact_005",
+      "question": "NX-045 的安装要求是什么？",
+      "reference_answer": "NX-045 的安装要求：断电后接线并固定在 DIN 导轨上。",
+      "required_claims": [
+        "NX-045 的安装要求：断电后接线并固定在 DIN 导轨上。"
+      ],
+      "tags": [
+        "simple_fact",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_specs.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "table_query_001",
+      "question": "NX-001 的额定功率是多少？",
+      "reference_answer": "NX-001 的额定功率为 120 W。",
+      "required_claims": [
+        "NX-001 的额定功率为 120 W。"
+      ],
+      "tags": [
+        "table_query",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_prices.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "table_query_002",
+      "question": "NX-002 的单价是多少？",
+      "reference_answer": "NX-002 的单价为 2850 CNY。",
+      "required_claims": [
+        "NX-002 的单价为 2850 CNY。"
+      ],
+      "tags": [
+        "table_query",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "inventory.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "table_query_003",
+      "question": "NX-003 的库存是多少？",
+      "reference_answer": "NX-003 在上海测试仓的可用库存为 88 台（2026-10-01）。",
+      "required_claims": [
+        "NX-003 在上海测试仓的可用库存为 88 台（2026-10-01）。"
+      ],
+      "tags": [
+        "table_query",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_specs.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "table_query_004",
+      "question": "NX-004 的额定功率是多少？",
+      "reference_answer": "NX-004 的额定功率为 60 W。",
+      "required_claims": [
+        "NX-004 的额定功率为 60 W。"
+      ],
+      "tags": [
+        "table_query",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_prices.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "table_query_005",
+      "question": "NX-005 的单价是多少？",
+      "reference_answer": "NX-005 的单价为 3550 CNY。",
+      "required_claims": [
+        "NX-005 的单价为 3550 CNY。"
+      ],
+      "tags": [
+        "table_query",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "aftersales_policy.html"
+        },
+        {
+          "canonical_name": "product_specs.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "cross_document_001",
+      "question": "2026-02-01 购买的 NX-081 额定功率和保修期分别是多少？",
+      "reference_answer": "NX-081 的额定功率为 155 W。 2026-01-01 起购买的设备保修 24 个月。",
+      "required_claims": [
+        "NX-081 的额定功率为 155 W。",
+        "2026-01-01 起购买的设备保修 24 个月。"
+      ],
+      "tags": [
+        "cross_document",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_manual.html"
+        },
+        {
+          "canonical_name": "product_specs.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "cross_document_002",
+      "question": "NX-082 的通信协议和安装要求分别是什么？",
+      "reference_answer": "NX-082 的通信协议为 Modbus RTU。 NX-082 的安装要求：断电后接线并固定在 DIN 导轨上。",
+      "required_claims": [
+        "NX-082 的通信协议为 Modbus RTU。",
+        "NX-082 的安装要求：断电后接线并固定在 DIN 导轨上。"
+      ],
+      "tags": [
+        "cross_document",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "aftersales_policy.html"
+        },
+        {
+          "canonical_name": "product_specs.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "cross_document_003",
+      "question": "2026-02-01 购买的 NX-083 额定功率和保修期分别是多少？",
+      "reference_answer": "NX-083 的额定功率为 165 W。 2026-01-01 起购买的设备保修 24 个月。",
+      "required_claims": [
+        "NX-083 的额定功率为 165 W。",
+        "2026-01-01 起购买的设备保修 24 个月。"
+      ],
+      "tags": [
+        "cross_document",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_manual.html"
+        },
+        {
+          "canonical_name": "product_specs.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "cross_document_004",
+      "question": "NX-084 的通信协议和安装要求分别是什么？",
+      "reference_answer": "NX-084 的通信协议为 MQTT。 NX-084 的安装要求：断电后接线并固定在 DIN 导轨上。",
+      "required_claims": [
+        "NX-084 的通信协议为 MQTT。",
+        "NX-084 的安装要求：断电后接线并固定在 DIN 导轨上。"
+      ],
+      "tags": [
+        "cross_document",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "aftersales_policy.html"
+        },
+        {
+          "canonical_name": "product_specs.xlsx"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "cross_document_005",
+      "question": "2026-02-01 购买的 NX-085 额定功率和保修期分别是多少？",
+      "reference_answer": "NX-085 的额定功率为 10 W。 2026-01-01 起购买的设备保修 24 个月。",
+      "required_claims": [
+        "NX-085 的额定功率为 10 W。",
+        "2026-01-01 起购买的设备保修 24 个月。"
+      ],
+      "tags": [
+        "cross_document",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": true,
+        "hitl": "none",
+        "outcome": "NO_KNOWLEDGE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [],
+      "hitl_answers": [],
+      "id": "no_answer_001",
+      "question": "NX-901 的额定功率是多少？",
+      "reference_answer": "知识库未提供该型号信息，无法确认额定功率。",
+      "required_claims": [],
+      "tags": [
+        "no_answer",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": true,
+        "hitl": "none",
+        "outcome": "NO_KNOWLEDGE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [],
+      "hitl_answers": [],
+      "id": "no_answer_002",
+      "question": "NX-902 的额定功率是多少？",
+      "reference_answer": "知识库未提供该型号信息，无法确认额定功率。",
+      "required_claims": [],
+      "tags": [
+        "no_answer",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": true,
+        "hitl": "none",
+        "outcome": "NO_KNOWLEDGE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [],
+      "hitl_answers": [],
+      "id": "no_answer_003",
+      "question": "NX-903 的额定功率是多少？",
+      "reference_answer": "知识库未提供该型号信息，无法确认额定功率。",
+      "required_claims": [],
+      "tags": [
+        "no_answer",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [
+        "公告的 1.0 功率与参数表 2.0 不同，应披露版本并选择 2.0 参数。"
+      ],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_specs.xlsx"
+        },
+        {
+          "canonical_name": "release_notes.html"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "version_policy_001",
+      "question": "NX-001 的公告与参数表功率不同；硬件 2.0 应使用哪个数值，如何解释差异？",
+      "reference_answer": "NX-001 的额定功率为 120 W。 NX-001 硬件 1.0 的额定功率为 130 W（2025-01-01）；2.0 自 2026-01-01 生效，以产品参数表的 2.0 数值为准。",
+      "required_claims": [
+        "NX-001 的额定功率为 120 W。",
+        "NX-001 硬件 1.0 的额定功率为 130 W（2025-01-01）；2.0 自 2026-01-01 生效，以产品参数表的 2.0 数值为准。"
+      ],
+      "tags": [
+        "version_policy",
+        "dev",
+        "synthetic"
+      ]
+    },
+    {
+      "conflicts": [
+        "公告的 1.0 功率与参数表 2.0 不同，应披露版本并选择 2.0 参数。"
+      ],
+      "critical": false,
+      "expected": {
+        "acceptable_abstention": false,
+        "hitl": "none",
+        "outcome": "ANSWERABLE"
+      },
+      "gold_chunks": [],
+      "gold_documents": [
+        {
+          "canonical_name": "product_specs.xlsx"
+        },
+        {
+          "canonical_name": "release_notes.html"
+        }
+      ],
+      "hitl_answers": [],
+      "id": "version_policy_002",
+      "question": "NX-002 的公告与参数表功率不同；硬件 2.0 应使用哪个数值，如何解释差异？",
+      "reference_answer": "NX-002 的额定功率为 90 W。 NX-002 硬件 1.0 的额定功率为 100 W（2025-01-01）；2.0 自 2026-01-01 生效，以产品参数表的 2.0 数值为准。",
+      "required_claims": [
+        "NX-002 的额定功率为 90 W。",
+        "NX-002 硬件 1.0 的额定功率为 100 W（2025-01-01）；2.0 自 2026-01-01 生效，以产品参数表的 2.0 数值为准。"
+      ],
+      "tags": [
+        "version_policy",
+        "dev",
+        "synthetic"
+      ]
+    }
+  ],
+  "name": "nebula_dev_v1",
+  "schema_version": 1
+}
