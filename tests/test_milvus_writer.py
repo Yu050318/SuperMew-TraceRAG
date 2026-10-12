@@ -11,7 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 def load_milvus_writer_module():
     fake_indexing = types.ModuleType("backend.indexing")
-    fake_indexing.__path__ = []
+    fake_indexing.__path__ = [str(REPO_ROOT / "backend" / "indexing")]
 
     fake_embedding = types.ModuleType("backend.indexing.embedding")
 

@@ -204,8 +204,11 @@ class AgentRuntime:
         return classify_provider_exception(exc, context=provider_context)
 
     def _finish(self, content: str) -> AgentRuntimeResult:
+        from backend.rag.evidence import audit_trace_citations
+
         stored = self.context.request_context.take_rag_trace() or {}
         rag_trace = normalize_rag_trace(stored.get("rag_trace"))
+        content, rag_trace = audit_trace_citations(content, rag_trace)
         return AgentRuntimeResult(
             content=content,
             rag_trace=rag_trace,
@@ -311,6 +314,6 @@ class AgentRuntime:
             )
             authoritative_content = "网页来源渲染未完成，本次回答未发布。请稍后重试。"
         result = self._finish(authoritative_content)
-        if terminal_buffering and authoritative_content:
-            yield AgentRuntimeEvent(type="content", content=authoritative_content)
+        if terminal_buffering and result.content:
+            yield AgentRuntimeEvent(type="content", content=result.content)
         yield AgentRuntimeEvent(type="completed", result=result)

@@ -21,6 +21,41 @@ function event(
 }
 
 describe('run event reducer', () => {
+  it('preserves identical selected Excel sources through live and journal replay', () => {
+    const chunk = {
+      filename: 'specs.xlsx',
+      chunk_id: 'v1::specs.xlsx::p0::l3::0',
+      chunk_level: 3,
+      document_id: 'd1',
+      document_version_id: 'v1',
+      section_id: 'sheet:Specs',
+      index_version: 'idx',
+      content_hash: 'a'.repeat(64),
+      text: '120 W',
+      sheet_name: 'Specs',
+      row_start: 2,
+      row_end: 2,
+      source_anchor: 'sheet:Specs:row:2',
+    };
+    const events = [
+      event(1, 'run.started'),
+      event(2, 'message.completed', {
+        content: '120 W[1]',
+        status: 'completed',
+        rag_trace: { retrieved_chunks: [chunk], evidence_chunks: [chunk], cited_evidence_ids: [1] },
+      }),
+      event(3, 'run.completed', { status: 'succeeded' }),
+    ];
+    const live = events.reduce(applyRunEvent, initialRunEventState('run_1', 'thread-1'));
+    const replay = JSON.parse(JSON.stringify(events)).reduce(
+      applyRunEvent,
+      initialRunEventState('run_1', 'thread-1')
+    );
+    expect(replay).toEqual(live);
+    expect(live.ragTrace).toMatchObject({
+      evidence_chunks: [{ source_anchor: 'sheet:Specs:row:2' }],
+    });
+  });
   it('keeps a Web failure visible while waiting for the authoritative final answer', () => {
     let state = applyRunEvent(initialRunEventState('run_1', 'thread-1'), event(1, 'run.started'));
     state = applyRunEvent(

@@ -264,6 +264,53 @@ def test_publication_stages_exact_artifacts_then_atomically_publishes(tmp_path):
     assert catalog.failed == []
 
 
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_excel_provenance_must_verify_before_manifest_and_publish(tmp_path, corrupt):
+    from backend.indexing.excel_provenance import source_anchor
+
+    catalog = FakeCatalog()
+    loader = FakeLoader()
+    for document in loader.documents:
+        if document["chunk_level"] == 3:
+            document.update(
+                sheet_name="参数",
+                row_start=2,
+                row_end=2,
+                source_anchor=source_anchor("参数", 2, 2),
+            )
+
+    class Writer(FakeWriter):
+        verified = False
+
+        def verify_provenance(self, receipt, documents):
+            assert catalog.manifests == [] and catalog.publish_calls == []
+            assert all(document["row_start"] == 2 for document in documents)
+            self.verified = True
+            if corrupt:
+                raise RuntimeError("metadata mismatch")
+
+    writer = Writer()
+    publication = _publication(tmp_path, catalog=catalog, loader=loader, writer=writer)
+    if corrupt:
+        with pytest.raises(AppError):
+            publication.run("job-1")
+        assert catalog.current_id == "version-v1"
+        assert catalog.manifests == [] and catalog.publish_calls == []
+        assert writer.deleted and all(
+            scope.document_version_id == "version-v2" for scope in writer.deleted
+        )
+    else:
+        assert publication.run("job-1").published
+    assert writer.verified
+
+
+def test_runtime_cannot_label_new_parser_as_legacy_build(monkeypatch):
+    monkeypatch.setenv("DOCUMENT_PARSER_VERSION", "document-loader-v2")
+    monkeypatch.setenv("DOCUMENT_CHUNKER_VERSION", "three-level-800-100-v2")
+    with pytest.raises(ValueError, match="Installed Excel parser"):
+        DocumentPublicationConfig.from_runtime()
+
+
 def test_worker_execution_fence_is_applied_to_every_durable_publication_write(
     tmp_path,
 ):

@@ -8,6 +8,12 @@
 - 数据库已执行 `alembic upgrade head`，且 Document、Document Version、ParentChunk 与索引数据都具有完整版本身份。
 - API 与 worker 使用相同的 parser、chunker、Embedding revision 与 index version。
 
+当前 XLSX 表格感知实现使用 `DOCUMENT_PARSER_VERSION=document-loader-excel-v3` 和
+`DOCUMENT_CHUNKER_VERSION=three-level-excel-row-v3`；API 与 Worker 必须同时部署匹配代码与配置。
+旧版本标签不能用于新 Parser。升级后经正式上传构建新 Candidate，不原地覆盖 READY Version。
+Excel 来源在原 Exact Verification 后额外按 Version Scope 核验，失败不发布。
+实现边界见 [S2 索引来源说明](../second-dev/s2-index-provenance.md)。
+
 ## 本地联合启动
 
 ```bash

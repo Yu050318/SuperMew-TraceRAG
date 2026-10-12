@@ -18,6 +18,8 @@ from backend.events.journal import append_event_in_session
 from backend.infra.database import SessionLocal
 from backend.rag.runtime_context import bind_rag_runtime_context
 from backend.runs.state import RunStatus
+from backend.documents.retrieval import DocumentRetrievalScope, RetrievalSnapshot
+from backend.schemas.rag import normalize_rag_trace
 
 
 SessionFactory = Callable[[], Session]
@@ -29,6 +31,7 @@ _RAG_TRACE_BULK_FIELDS = {
     "rewrite_retrieved_chunks",
     "hitl_targeted_retrieved_chunks",
     "sub_traces",
+    "evidence_chunks",
 }
 
 
@@ -36,23 +39,59 @@ def _jsonable(value):
     return json.loads(json.dumps(value, ensure_ascii=False, default=str))
 
 
+def _metadata_trace(trace: dict) -> dict:
+    normalized = normalize_rag_trace(trace) or {}
+    compact = {
+        key: value
+        for key, value in normalized.items()
+        if key not in _RAG_TRACE_BULK_FIELDS
+    }
+    for key in _RAG_TRACE_BULK_FIELDS - {"sub_traces"}:
+        if normalized.get(key):
+            compact[key] = [
+                {field: value for field, value in doc.items() if field != "text"}
+                for doc in normalized[key][:64]
+            ]
+    if normalized.get("sub_traces"):
+        compact["sub_traces"] = [
+            _metadata_trace(child) for child in normalized["sub_traces"][:4]
+        ]
+    for key in ("cited_evidence_ids", "citation_count", "invalid_citation_count"):
+        compact.pop(key, None)
+    return compact
+
+
 def _compact_hitl_state(state: dict) -> dict:
-    compact = dict(state)
+    from backend.rag.pipeline import RAGState
+
+    compact = {
+        key: value for key, value in state.items() if key in RAGState.__annotations__
+    }
     for key in ("docs", "context", "sub_results"):
         compact.pop(key, None)
     trace = state.get("rag_trace")
     if isinstance(trace, dict):
-        compact["rag_trace"] = {
-            key: value
-            for key, value in trace.items()
-            if key not in _RAG_TRACE_BULK_FIELDS
-        }
-    return _jsonable(compact)
+        compact["rag_trace"] = _metadata_trace(trace)
+    if state.get("retrieval_snapshot") is not None:
+        compact["retrieval_snapshot"] = RetrievalSnapshot.from_payload(
+            state["retrieval_snapshot"], tenant_id=state["tenant_id"]
+        ).to_payload()
+    compact = _jsonable(compact)
+    if len(json.dumps(compact, ensure_ascii=False).encode("utf-8")) > 262144:
+        raise ValueError("HITL checkpoint exceeds 256 KiB")
+    return compact
 
 
 def _compact_resume_result(state: dict) -> dict:
+    from backend.rag.pipeline import _copy_jsonable_doc
+
     compact = _compact_hitl_state(state)
-    compact["docs"] = _jsonable(state.get("docs") or [])
+    documents = state.get("docs") or []
+    if len(documents) > 64:
+        raise ValueError("resume evidence exceeds 64 chunks")
+    compact["docs"] = [_copy_jsonable_doc(doc) for doc in documents]
+    if len(json.dumps(compact, ensure_ascii=False).encode("utf-8")) > 262144:
+        raise ValueError("resume result exceeds 256 KiB")
     return compact
 
 
@@ -659,6 +698,7 @@ class CheckpointedRagRunner:
             result = checkpointless_rag_graph.invoke(
                 _initial_state(
                     question,
+                    ctx=context,
                     tenant_id=context.require_tenant_id(),
                     runtime_context_id=runtime_context_id,
                     model_snapshot=context.model_catalog_snapshot(),
@@ -717,6 +757,30 @@ class CheckpointedRagRunner:
                 status_code=409,
             )
         _assert_checkpoint_tenant(state, context)
+        if (
+            consumed.should_resume
+            and consumed.next_nodes
+            and state.get("retrieval_snapshot") is None
+        ):
+            raise AppError(
+                ErrorCode.RUN_STATE_CONFLICT,
+                "旧 checkpoint 缺少冻结检索快照，请重新发起提问",
+                status_code=409,
+            )
+        if state.get("retrieval_snapshot") is not None:
+            frozen = RetrievalSnapshot.from_payload(
+                state["retrieval_snapshot"], tenant_id=context.require_tenant_id()
+            )
+            if consumed.should_resume and consumed.next_nodes:
+                try:
+                    DocumentRetrievalScope().assert_snapshot_available(frozen)
+                except ValueError as exc:
+                    raise AppError(
+                        ErrorCode.RUN_STATE_CONFLICT,
+                        "原 Run 的检索版本已不可用，请重新发起提问",
+                        status_code=409,
+                    ) from exc
+            context.restore_rag_retrieval_snapshot(frozen)
         if not consumed.should_resume or not consumed.next_nodes:
             return RagRunOutcome(
                 result=_restore_resume_result(state),

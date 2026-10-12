@@ -289,6 +289,8 @@ def rag_source_fingerprint(root: str | Path) -> str:
         "backend/documents/publication.py",
         "backend/documents/retrieval.py",
         "backend/indexing/document_loader.py",
+        "backend/indexing/excel_parser.py",
+        "backend/indexing/excel_provenance.py",
         "backend/indexing/embedding.py",
         "backend/indexing/html_processor.py",
         "backend/indexing/milvus_client.py",

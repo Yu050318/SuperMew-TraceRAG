@@ -10,6 +10,7 @@ from unittest.mock import Mock, patch
 from backend.core.errors import AppError, ErrorCode
 from backend.runs.request_context import RunRequestContext
 from backend.providers import ProviderCode, ProviderError, ProviderOperation
+from backend.documents.retrieval import RetrievalSnapshot
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -91,7 +92,7 @@ def load_pipeline(
 
     fake_utils.retrieve_documents = fake_retrieve_documents
     fake_utils.resolve_retrieval_snapshot = resolve_retrieval_snapshot or (
-        lambda **_kwargs: object()
+        lambda **kwargs: RetrievalSnapshot(kwargs["tenant_id"], "test-index", (), 0, 0)
     )
     rewrite_impl = rewrite_query_once or (
         lambda query: {

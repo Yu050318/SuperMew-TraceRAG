@@ -161,6 +161,10 @@ cp .env.example .env
 
 - `ARK_API_KEY`、`BASE_URL`、`MODEL`、`FAST_MODEL`、`GRADE_MODEL` 和
   `EVALUATION_MODEL`；这些模型值只用于首次创建模型控制面默认值。
+- DeepSeek 网关若不接受原生 `json_schema`，可用 `MODEL_STRUCTURED_OUTPUT_POLICIES`
+  按精确的 `Model Profile ID:version` 显式选择 `deepseek_function_calling`（JSON 对象，默认 `{}`）。
+  它只在结构化请求中关闭 Thinking，普通对话和未选中的 Profile 不变；修改后同步重启 API/Worker。
+  配置示例见 `.env.example`；CLI 环境 Snapshot 与数据库 Profile 的 ID 可能不同，需分别核对。
 - `JWT_SECRET_KEY`：至少 32 字符的随机值，例如使用 `openssl rand -hex 32` 生成。
 - 如需注册管理员，设置独立的 `ADMIN_INVITE_CODE`；留空会禁用公开 admin 注册。
 
@@ -186,20 +190,77 @@ uv run --frozen python -m backend.tools.registry_cli validate
 
 开发 Compose 只启动 PostgreSQL、Redis、etcd、MinIO、Milvus 和 Attu，不启动应用进程。
 
+复用本机已有 PostgreSQL 和 Milvus 时，在 `.env` 中设置 `DATABASE_URL`、`MILVUS_HOST`、
+`MILVUS_PORT` 和独立的 `MILVUS_COLLECTION`。建议为 SuperMew 创建独立数据库及账号，
+然后对该数据库执行迁移。不要让两个 Milvus 进程共享同一个数据目录。
+本机可使用被 Git 忽略的 `docker-compose.override.yml`，给 `postgres`、`standalone`、
+`etcd`、`minio` 设置 `profiles: [dedicated]`，并将 Attu 的 `depends_on` 设置为
+`!reset []`、`MILVUS_URL` 设置为 `host.docker.internal:19530`。这样默认
+`docker compose up -d` 只启动 Redis 和 Attu；已有数据库由原部署管理。
+
+开发 Compose 的 MinIO 使用 Net Insight 保存的上游镜像，并固定 SHA256 摘要；原来的
+`minio/minio` 镜像已无法公开拉取。镜像来源和上游版本见
+[netiedge/minio](https://hub.docker.com/r/netiedge/minio)。此处只调整本地开发配置，生产 Compose
+仍需要部署者选择并验证可用的 MinIO 镜像来源。
+
+#### Windows：在 WSL2 中运行后端
+
+Skill Registry 依赖 Linux 的 `O_DIRECTORY` 和 `O_NOFOLLOW` 安全文件访问能力，原生 Windows
+Python 无法完成 Registry 校验。Docker 和前端构建可以在 PowerShell 中运行；后端使用 WSL2。
+不要在 Linux 中复用 Windows 的 `.venv`。
+
+在已安装 Python 3.12 和 `uv` 的 WSL 中进入项目目录，创建独立 Linux 环境。以下命令按锁文件
+安装依赖，并为默认的 CPU Embedding 配置选择同版本的 CPU PyTorch：
+
+```bash
+uv venv "$HOME/.local/share/supermew/venv" --python python3.12
+uv export --frozen --no-dev --no-hashes --no-header --no-annotate > /tmp/supermew-requirements.txt
+grep -Ev '^(cuda-|nvidia-|triton==)' /tmp/supermew-requirements.txt > /tmp/supermew-requirements-cpu.txt
+uv pip install --python "$HOME/.local/share/supermew/venv/bin/python" \
+  --torch-backend cpu -r /tmp/supermew-requirements-cpu.txt
+"$HOME/.local/share/supermew/venv/bin/python" -m alembic upgrade head
+"$HOME/.local/share/supermew/venv/bin/python" -m backend.tools.registry_cli validate
+```
+
+Windows 使用 localhost 代理时，可在 `%USERPROFILE%/.wslconfig` 的 `[wsl2]` 中配置
+`networkingMode=mirrored` 和 `autoProxy=true`，重启 WSL 后验证数据库和模型下载连接。
+参见 [Microsoft WSL 网络说明](https://learn.microsoft.com/en-us/windows/wsl/networking)。
+先下载配置中固定 revision 的 Embedding 模型，再启动应用，避免首次大文件下载越过 warmup 超时。
+模型完整缓存后，本机可设置 `HF_HUB_OFFLINE=1`，避免每次启动检查远程模型文件；
+切换模型或 revision 前须关闭该选项并下载新的缓存。CPU 首次预热较慢时，按实际耗时调整
+`.env` 中的 `EMBEDDING_TIMEOUT_SECONDS`。
+
+完成准备后，在项目根目录的 PowerShell 中运行：
+
+```powershell
+./scripts/start-wsl.ps1
+# 其他发行版：./scripts/start-wsl.ps1 -Distribution Ubuntu
+```
+
+该入口复用后面的三进程启动器；使用已经安装好的 Linux 环境，Ctrl+C 可停止应用进程。
+
 ### 3. 启动应用
+
+先确认 PostgreSQL、Redis 和 Milvus 已运行。Windows PowerShell 使用前面配置好的 WSL 环境：
+
+```powershell
+.\scripts\start-wsl.ps1
+```
+
+该脚本已关闭自动重载。Linux / macOS，或已经激活 Linux 虚拟环境的 WSL Bash，使用：
 
 ```bash
 ./scripts/start.sh
 ```
 
-统一启动器会管理三个进程：
+两个脚本都调用 `backend.launcher`，统一管理三个进程：
 
 - FastAPI API
 - 持久化索引 worker
 - RAG 评估 worker
 
 任一进程异常退出时，启动器会关闭其余进程，避免出现 API 可访问但后台任务无人消费的状态。
-关闭 Uvicorn 自动重载可使用：
+使用 Bash 入口时，关闭 Uvicorn 自动重载可使用：
 
 ```bash
 ./scripts/start.sh --no-reload
@@ -769,6 +830,12 @@ Case，并由独立 worker 执行。CLI 更适合仓库 Gate、分支比较与�
   `DOCUMENT_CHUNKER_VERSION`、`DOCUMENT_INDEX_VERSION`：Document build fingerprint；API 与索引
   worker 必须一致。
 
+XLSX 使用有界行级解析：每个叶子包含列名和值，内部保留 Sheet、物理行和来源锚点。
+部署须同步设置 `DOCUMENT_PARSER_VERSION=document-loader-excel-v3` 与
+`DOCUMENT_CHUNKER_VERSION=three-level-excel-row-v3` 并重启 API/Worker；旧 READY
+Version 不会原地改写。公式及合并单元格暂不支持，XLS 保留原解析路径。
+限制与实验记录见 [S2 Excel 设计](docs/second-dev/s2-excel-parser-design.md)。
+
 ### Worker、Run 与 Agent
 
 Agent 会在模型调用预算内预留最后一轮回答；工具调用额度用完后也不再继续调用工具，而是
@@ -1045,3 +1112,9 @@ docker compose -f docker-compose.prod.yml config
 - [模型控制面与 RAG Evaluation Runtime](docs/adr/0024-model-control-and-rag-evaluation-runtime.md)
 - [持久化能力控制面](docs/adr/0025-persistent-capability-control-plane.md)
 - [Run-local Source ID 与 Tavily Extract](docs/adr/0026-run-local-source-id-and-tavily-extract.md)
+- [RAG 来源、入选证据与冻结恢复](docs/adr/0027-rag-provenance-and-frozen-resume.md)
+- [Excel Sheet/行号与引用展示](docs/second-dev/s3-frontend-citations.md)：沿用聊天页引用详情，
+  区分入选与已引用证据；父块显示实际命中行集合，不提供未实现的 Excel 原文件跳转。
+- [S3 开发集引用审计与已知限制](docs/second-dev/s3-citation-evaluation.md)
+- [S4-A 细粒度证据](docs/second-dev/s4a-evidence-attribution-design.md)：复用已授权真实叶子，
+  父块保留理解上下文；身份合法不等于事实级验证，无法定位时保留父块降级。

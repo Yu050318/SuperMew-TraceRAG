@@ -432,6 +432,18 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     results = []
+    if str(ROOT) not in sys.path:
+        sys.path.insert(0, str(ROOT))
+    from backend.schemas.rag import RagTrace
+
+    results.append(
+        _sync(
+            ROOT / "contracts" / "rag_trace_v1.schema.json",
+            json.dumps(RagTrace.model_json_schema(), ensure_ascii=False, indent=2)
+            + "\n",
+            check=args.check,
+        )
+    )
     for generation in CONTRACT_GENERATIONS:
         schema = _load_schema(generation.schema_path)
         results.extend(

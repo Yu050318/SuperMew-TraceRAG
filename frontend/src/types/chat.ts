@@ -2,10 +2,21 @@ import type { RunArtifactState, RunTimelineItem } from '@/events/runEventReducer
 
 export type { RunEventType, RunEventV1 } from './generated/run-event-v1';
 
+export interface ExcelSource {
+  sheet_name: string;
+  row_start: number;
+  row_end: number;
+  source_anchor: string;
+}
+
+export interface MatchedLeafSource extends ExcelSource {
+  chunk_id: string;
+}
+
 export interface RetrievedChunk {
   filename: string;
   file_type?: string;
-  page_number?: number;
+  page_number?: number | string;
   rrf_rank?: number;
   rerank_score?: number | null;
   text?: string;
@@ -21,6 +32,13 @@ export interface RetrievedChunk {
   content_hash: string;
   merged_from_children?: boolean;
   merged_child_count?: number;
+  sheet_name?: string;
+  row_start?: number;
+  row_end?: number;
+  source_anchor?: string;
+  matched_leaf_sources?: MatchedLeafSource[];
+  matched_leaf_sources_truncated?: boolean;
+  evidence_text_truncated?: boolean;
 }
 
 export interface RetrievalTargetTrace {
@@ -73,6 +91,12 @@ export interface RagTraceFields {
   candidate_count?: number | null;
   retrieval_top_k?: number;
   retrieved_chunks?: RetrievedChunk[];
+  evidence_chunks?: RetrievedChunk[];
+  evidence_omitted_count?: number;
+  evidence_truncated_count?: number;
+  cited_evidence_ids?: number[];
+  citation_count?: number;
+  invalid_citation_count?: number;
   leaf_retrieve_level?: number;
   auto_merge_enabled?: boolean | null;
   auto_merge_applied?: boolean | null;

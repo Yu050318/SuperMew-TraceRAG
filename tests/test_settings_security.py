@@ -256,6 +256,19 @@ class SettingsSecurityTests(unittest.TestCase):
         self.assertFalse(settings.rerank.enabled)
         self.assertEqual("", settings.rerank.endpoint)
 
+    def test_dashscope_rerank_endpoint_is_not_rewritten(self):
+        endpoint = (
+            "https://maas.example.test/api/v1/services/rerank/text-rerank/text-rerank"
+        )
+        settings = RerankSettings(
+            _env_file=None,
+            RERANK_MODEL="qwen3.7-text-rerank",
+            RERANK_BINDING_HOST=endpoint,
+            RERANK_API_KEY="secret",
+        )
+
+        self.assertEqual(endpoint, settings.endpoint)
+
     def test_rerank_min_score_rejects_non_finite_values(self):
         with self.assertRaises(ValidationError):
             RerankSettings(_env_file=None, RERANK_MIN_SCORE="nan")

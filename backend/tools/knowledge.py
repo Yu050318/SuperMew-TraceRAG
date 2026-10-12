@@ -3,7 +3,11 @@ import re
 
 from langchain_core.tools import tool
 
-from backend.rag.evidence import agent_evidence_character_budget, pack_evidence
+from backend.rag.evidence import (
+    agent_evidence_character_budget,
+    evidence_trace,
+    pack_evidence,
+)
 from backend.runs.request_context import RunRequestContext
 
 
@@ -15,6 +19,10 @@ def _render_rag_result(
 ) -> str:
     docs = rag_result.get("docs", [])
     rag_trace = dict(rag_result.get("rag_trace") or {})
+    # No Answer EvidencePack exists yet on clarification/refusal paths.
+    # An explicit empty selection prevents candidate ranks becoming citations.
+    rag_trace["evidence_chunks"] = []
+    rag_trace["cited_evidence_ids"] = []
     if checkpoint_pause:
         rag_trace.update(
             {
@@ -79,7 +87,15 @@ def _render_rag_result(
     evidence = pack_evidence(
         docs,
         maximum_characters=agent_evidence_character_budget(),
+        question=str(
+            rag_result.get("original_question")
+            or rag_result.get("question")
+            or rag_trace.get("query")
+            or ""
+        ),
     )
+    rag_trace.setdefault("retrieved_chunks", docs)
+    ctx.store_rag_trace(evidence_trace(rag_trace, evidence), hitl_resume_state)
     budget_notice = ""
     if evidence.omitted_count or evidence.truncated_count:
         budget_notice = (

@@ -116,7 +116,11 @@ marked.use({
   gfm: true,
 });
 
-export function parseMarkdown(text: string, msgIndex?: number | null): string {
+export function parseMarkdown(
+  text: string,
+  msgIndex?: number | null,
+  allowedIds?: number[]
+): string {
   const html = marked.parse(text || '', { async: false }) as string;
 
   if (msgIndex === undefined || msgIndex === null) {
@@ -140,9 +144,10 @@ export function parseMarkdown(text: string, msgIndex?: number | null): string {
             .filter((n: string) => /^\d+$/.test(n));
           if (numbers.length === 0) return match;
           return numbers
-            .map(
-              (n: string) =>
-                `<sup class="cite-ref" data-msg-index="${Number.isSafeInteger(msgIndex) ? msgIndex : 0}" data-chunk-index="${n}">[${n}]</sup>`
+            .map((n: string) =>
+              allowedIds !== undefined && !allowedIds.includes(Number(n))
+                ? `[${n}]`
+                : `<sup class="cite-ref" data-msg-index="${Number.isSafeInteger(msgIndex) ? msgIndex : 0}" data-chunk-index="${n}">[${n}]</sup>`
             )
             .join('');
         });

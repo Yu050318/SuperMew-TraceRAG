@@ -15,7 +15,8 @@
           {{ skillCompactName(msg.skillName) }}
         </small>
         <small v-if="msg.ragTrace?.retrieved_chunks?.length">
-          已引用 {{ msg.ragTrace.retrieved_chunks.length }} 个来源
+          检索 {{ msg.ragTrace.retrieved_chunks.length }} 个片段 · 已引用
+          {{ msg.ragTrace.cited_evidence_ids?.length ?? '未记录' }}
         </small>
       </div>
 
@@ -35,6 +36,7 @@
           <MessageContent
             :text="msg.text"
             :is-user="false"
+            :allowed-citation-ids="allowedCitationIds(msg.ragTrace)"
             :msg-index="msgIndex"
             @cite-click="onCiteClick"
           />
@@ -81,6 +83,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { allowedCitationIds } from '@/utils/ragSources';
 import { skillCompactName } from '@/capabilities/skillPresentation';
 import MessageContent from './MessageContent.vue';
 import ThinkingTrace from './ThinkingTrace.vue';

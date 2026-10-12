@@ -10,10 +10,11 @@ from langgraph.types import Command, Send, interrupt
 from pydantic import BaseModel, Field
 
 from backend.core.errors import AppError, ErrorCode
+from backend.documents.retrieval import DocumentRetrievalScope, RetrievalSnapshot
 from backend.agent.models import ModelRole, model_registry
 from backend.model_control import ModelCatalogSnapshot
 from backend.runs.request_context import RunRequestContext
-from backend.schemas.rag import HitlResumeState, normalize_rag_sub_trace
+from backend.schemas.rag import HitlResumeState, RetrievedChunk, normalize_rag_sub_trace
 from backend.rag.utils import (
     RETRIEVAL_TOP_K,
     retrieve_documents,
@@ -114,6 +115,22 @@ EVIDENCE_GRADE_PROMPT = (
     "- 如果 route 是 clarify 或 scope_select，请给 hitl_prompt；如果能列出选项，请给 hitl_options。"
 )
 
+MULTI_FACT_EVIDENCE_GUIDANCE = (
+    "\n本问题分别要求多个事实。missing_slots 只填写用户没有提供的必要条件，"
+    "不得填写缺少的文档、证据或来源。用户条件明确但部分事实缺少证据时，"
+    "ambiguity=none、answerability=partial，用 missing_evidence_query 给出仅针对"
+    "缺失事实的独立检索问题。保留购买日期、适用对象等约束；不要再次重点检索"
+    "已经支持的参数，不要猜测答案或期限。政策必须依据证据中的适用对象和购买"
+    "日期判断，不得用当前年份代替购买日期。没有日期且多种规则均可能适用时澄清。"
+)
+
+
+def _explicit_multi_fact_question(question: str) -> bool:
+    """Conservative scope: explicit separate requests, not version comparisons."""
+    return "分别" in question and any(
+        word in question for word in ("和", "与", "以及", "、")
+    )
+
 
 class EvidenceGrade(BaseModel):
     """结构化证据评分：同时判断相关性、可回答性与下一步路由。"""
@@ -135,6 +152,11 @@ class EvidenceGrade(BaseModel):
     hitl_prompt: str = ""
     hitl_options: List[str] = Field(default_factory=list)
     reason: str = ""
+    missing_evidence_query: str = Field(
+        default="",
+        max_length=300,
+        description="用户条件明确但缺少证据时，仅针对缺失事实的独立检索问题；不得包含猜测答案",
+    )
 
 
 class ComplexityResult(BaseModel):
@@ -153,6 +175,7 @@ class ComplexityResult(BaseModel):
 
 class RAGState(TypedDict):
     tenant_id: str
+    retrieval_snapshot: Optional[dict]
     original_question: str
     question: str
     query: str
@@ -166,6 +189,7 @@ class RAGState(TypedDict):
     evidence_ambiguity: Optional[str]
     evidence_confidence: Optional[float]
     missing_slots: Optional[List[str]]
+    missing_evidence_query: Optional[str]
     hitl_prompt: Optional[str]
     hitl_options: Optional[List[str]]
     hitl_answers: List[str]
@@ -205,17 +229,18 @@ def _pack_grader_docs(docs: List[dict]) -> EvidencePack:
 
 def _copy_jsonable_doc(doc: dict) -> dict:
     """Keep resume snapshots small and JSON-safe."""
-    allowed = {
-        "filename",
-        "page_number",
-        "text",
-        "score",
-        "rrf_rank",
-        "rerank_score",
-        "chunk_id",
-        "doc_id",
-    }
-    return {key: value for key, value in doc.items() if key in allowed}
+    payload = {key: doc[key] for key in RetrievedChunk.model_fields if key in doc}
+    copied = RetrievedChunk.model_validate(payload).model_dump(exclude_none=True)
+    if "_citation_leaves" in doc:
+        from backend.rag.evidence import citation_leaves
+
+        copied["_citation_leaves"] = citation_leaves(doc)
+        copied["_citation_leaves_incomplete"] = bool(
+            doc.get("_citation_leaves_incomplete")
+        )
+        for key in ("tenant_id", "knowledge_base_id", "acl_tags"):
+            copied[key] = doc[key]
+    return copied
 
 
 def _copy_jsonable_docs(docs: List[dict] | None) -> List[dict]:
@@ -326,6 +351,12 @@ def _retrieve_for_state(state: RAGState, query: str) -> dict:
     tenant_id = _required_tenant_id(state.get("tenant_id"))
     ctx = get_rag_runtime_context(state.get("runtime_context_id"))
     retrieval_snapshot = None
+    if state.get("retrieval_snapshot") is not None:
+        retrieval_snapshot = RetrievalSnapshot.from_payload(
+            state["retrieval_snapshot"], tenant_id=tenant_id
+        )
+        if ctx is not None:
+            ctx.restore_rag_retrieval_snapshot(retrieval_snapshot)
     if ctx is not None:
         retrieval_snapshot = ctx.get_or_resolve_rag_retrieval_snapshot(
             lambda: resolve_retrieval_snapshot(
@@ -334,7 +365,7 @@ def _retrieve_for_state(state: RAGState, query: str) -> dict:
                 cancellation=cancellation,
             )
         )
-    return retrieve_documents(
+    result = retrieve_documents(
         query,
         top_k=RETRIEVAL_TOP_K,
         tenant_id=tenant_id,
@@ -342,6 +373,9 @@ def _retrieve_for_state(state: RAGState, query: str) -> dict:
         deadline=deadline,
         cancellation=cancellation,
     )
+    if isinstance(retrieval_snapshot, RetrievalSnapshot):
+        result["retrieval_snapshot"] = retrieval_snapshot.to_payload()
+    return result
 
 
 def _invoke_structured_model(
@@ -387,8 +421,19 @@ def _initial_state(
         model_snapshot = ctx.model_snapshot_payload()
     if isinstance(model_snapshot, ModelCatalogSnapshot):
         model_snapshot = model_snapshot.model_dump(mode="json")
+    frozen_snapshot = None
+    if ctx is not None:
+        deadline, cancellation = ctx.provider_runtime()
+        frozen_snapshot = ctx.get_or_resolve_rag_retrieval_snapshot(
+            lambda: resolve_retrieval_snapshot(
+                tenant_id=tenant_id, deadline=deadline, cancellation=cancellation
+            )
+        )
     return {
         "tenant_id": tenant_id,
+        "retrieval_snapshot": frozen_snapshot.to_payload()
+        if isinstance(frozen_snapshot, RetrievalSnapshot)
+        else None,
         "original_question": question,
         "question": question,
         "query": question,
@@ -475,6 +520,7 @@ def retrieve_initial(state: RAGState) -> RAGState:
         "docs": results,
         "context": context,
         "rag_trace": rag_trace,
+        "retrieval_snapshot": retrieved.get("retrieval_snapshot"),
     }
 
 
@@ -586,6 +632,11 @@ def _resolve_route(grade: EvidenceGrade, state: RAGState) -> str:
     if route == "answer" and answer_is_supported:
         return "answer"
 
+    # Reuse the single rewrite budget, not a second retrieval loop. Genuine
+    # user ambiguity has already returned above and must never be bypassed.
+    if grade.missing_evidence_query.strip() and grade.answerability == "partial":
+        return "rewrite" if rewrite_count < 1 else "clarify"
+
     # 子问题不做二次纠错。partial 证据交给 synthesis 合并，完全不可回答则停止。
     if is_sub_agent:
         if grade.answerability in ("partial", "sufficient"):
@@ -627,6 +678,7 @@ def _grade_update(grade: EvidenceGrade, route: str) -> dict:
         "evidence_confidence": grade.confidence,
         "evidence_reason": grade.reason,
         "missing_slots": grade.missing_slots,
+        "missing_evidence_query": grade.missing_evidence_query.strip(),
         "hitl_prompt": hitl_prompt,
         "hitl_options": grade.hitl_options,
         "route": route,
@@ -654,6 +706,10 @@ def grade_documents_node(state: RAGState) -> RAGState:
             question=question,
             context=grader_evidence.text,
         )
+        if _explicit_multi_fact_question(
+            str(state.get("original_question") or question)
+        ):
+            prompt += MULTI_FACT_EVIDENCE_GUIDANCE
         grade = _invoke_structured_model(
             state,
             model=grader,
@@ -662,6 +718,11 @@ def grade_documents_node(state: RAGState) -> RAGState:
             provider=grader_provider,
             timeout_seconds=grader_timeout,
         )
+
+    if not _explicit_multi_fact_question(
+        str(state.get("original_question") or state.get("question") or "")
+    ):
+        grade = grade.model_copy(update={"missing_evidence_query": ""})
 
     route = _resolve_route(grade, state)
     grade_update = _grade_update(grade, route)
@@ -704,6 +765,7 @@ def grade_documents_node(state: RAGState) -> RAGState:
         "evidence_ambiguity": grade.ambiguity,
         "evidence_confidence": grade.confidence,
         "missing_slots": grade.missing_slots,
+        "missing_evidence_query": grade.missing_evidence_query.strip(),
         "hitl_prompt": grade_update["hitl_prompt"],
         "hitl_options": grade.hitl_options,
         "rag_trace": rag_trace,
@@ -738,6 +800,25 @@ def rewrite_question_node(state: RAGState) -> RAGState:
             "docs": [],
             "context": "",
             "rag_trace": rag_trace,
+        }
+
+    missing_query = str(state.get("missing_evidence_query") or "").strip()
+    if missing_query:
+        # The Grader has already produced the bounded query; no extra Fast call.
+        trace = dict(state.get("rag_trace") or {})
+        trace.update(
+            rewrite_method="step_back",
+            rewritten_query=missing_query,
+            step_back_question=missing_query,
+            rewrite_count=rewrite_count + 1,
+        )
+        return {
+            "rewrite_method": "step_back",
+            "rewritten_query": missing_query,
+            "step_back_question": missing_query,
+            "hyde_document": "",
+            "rewrite_count": rewrite_count + 1,
+            "rag_trace": trace,
         }
 
     _emit(state, "🧠", "选择 Step-back / HyDE 重写方式")
@@ -796,6 +877,19 @@ def retrieve_rewritten(state: RAGState) -> RAGState:
     _emit(state, "🔄", f"使用 {method_label} 查询重新检索...")
     retrieved = _retrieve_for_state(state, rewritten_query)
     results = retrieved.get("docs", [])
+    if state.get("missing_evidence_query"):
+        # Round-robin keeps the supported original fact and the new evidence
+        # early in the unchanged Grader/Answer budgets; identity dedupe is native.
+        original = state.get("docs") or []
+        results = dedupe_documents(
+            [
+                doc
+                for i in range(max(len(original), len(results)))
+                for group in (original, results)
+                if i < len(group)
+                for doc in (group[i],)
+            ]
+        )[:64]
     retrieve_meta = retrieved.get("meta", {})
     _emit_retrieval_warnings(state, retrieve_meta)
     context = _format_docs(results)
@@ -979,6 +1073,11 @@ def classify_complexity(state: RAGState) -> RAGState:
     )
 
     prompt = COMPLEXITY_PROMPT.format(question=question)
+    if _explicit_multi_fact_question(question):
+        prompt += (
+            "\n同一实体不代表单一事实；本问题分别要求多个事实，应规划独立子问题。"
+            "参数与政策分别检索，保留购买日期和适用范围，不得预设答案。"
+        )
     result = _invoke_structured_model(
         state,
         model=model,
@@ -1034,15 +1133,20 @@ def _fanout_sub_questions(state: RAGState):
     return [
         Send(
             "rag_sub_agent",
-            _initial_state(
-                sq,
-                tenant_id=state.get("tenant_id"),
-                runtime_context_id=state.get("runtime_context_id"),
-                model_snapshot=state.get("model_snapshot"),
-                is_sub_agent=True,
-                rag_step_group=f"子问题 {i}",
-                rag_step_group_label=sq,
-            ),
+            {
+                **_initial_state(
+                    sq,
+                    tenant_id=state.get("tenant_id"),
+                    runtime_context_id=state.get("runtime_context_id"),
+                    model_snapshot=state.get("model_snapshot"),
+                    is_sub_agent=True,
+                    rag_step_group=f"子问题 {i}",
+                    rag_step_group_label=sq,
+                ),
+                "retrieval_snapshot": state.get("retrieval_snapshot"),
+                "original_question": state.get("original_question")
+                or state["question"],
+            },
         )
         for i, sq in enumerate(sub_qs, 1)
     ]
@@ -1195,6 +1299,14 @@ def synthesis(state: RAGState) -> RAGState:
         "hitl_prompt": hitl_prompt,
         "hitl_options": hitl_options,
         "rag_trace": rag_trace,
+        "retrieval_snapshot": next(
+            (
+                result["retrieval_snapshot"]
+                for result in sub_results
+                if result.get("retrieval_snapshot") is not None
+            ),
+            state.get("retrieval_snapshot"),
+        ),
     }
 
 
@@ -1205,6 +1317,10 @@ def rag_sub_agent(state: RAGState) -> RAGState:
     try:
         result.update(retrieve_initial(result))
         result.update(grade_documents_node(result))
+        if result.get("route") == "rewrite":
+            result.update(rewrite_question_node(result))
+            result.update(retrieve_rewritten(result))
+            result.update(grade_documents_node(result))
     except ProviderError as exc:
         snapshot = exc.to_snapshot()
         return {
@@ -1237,6 +1353,7 @@ def rag_sub_agent(state: RAGState) -> RAGState:
                 or trace.get("retrieval_status"),
                 "route": result.get("route") or trace.get("route"),
                 "rag_trace": trace,
+                "retrieval_snapshot": result.get("retrieval_snapshot"),
             }
         ],
     }
@@ -1482,6 +1599,26 @@ def resume_rag_from_hitl(
             stage="hitl_resume",
         )
     runtime_context_id = snapshot.values.get("runtime_context_id")
+    if snapshot.values.get("retrieval_snapshot") is None:
+        raise AppError(
+            ErrorCode.RUN_STATE_CONFLICT,
+            "旧 checkpoint 缺少冻结检索快照，请重新发起提问",
+            status_code=409,
+            stage="hitl_resume",
+        )
+    try:
+        DocumentRetrievalScope().assert_snapshot_available(
+            RetrievalSnapshot.from_payload(
+                snapshot.values["retrieval_snapshot"], tenant_id=request_tenant_id
+            )
+        )
+    except ValueError as exc:
+        raise AppError(
+            ErrorCode.RUN_STATE_CONFLICT,
+            "原 Run 的检索版本已不可用，请重新发起提问",
+            status_code=409,
+            stage="hitl_resume",
+        ) from exc
     with bind_rag_runtime_context(ctx, runtime_context_id):
         result = graph.invoke(Command(resume=user_answer), config=config)
     interrupts = list(result.pop("__interrupt__", []) or [])
@@ -1507,6 +1644,7 @@ def run_rag_graph(question: str, ctx: RunRequestContext) -> dict:
         result = graph.invoke(
             _initial_state(
                 question,
+                ctx=ctx,
                 tenant_id=ctx.require_tenant_id(),
                 runtime_context_id=runtime_context_id,
                 model_snapshot=ctx.model_catalog_snapshot(),

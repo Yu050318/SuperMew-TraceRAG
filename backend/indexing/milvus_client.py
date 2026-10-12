@@ -28,6 +28,7 @@ from pymilvus.exceptions import (
 )
 
 from backend.security.milvus_filters import in_filter, version_scope_filter
+from backend.indexing.excel_provenance import PROVENANCE_FIELDS, excel_provenance
 
 QUERY_MAX_LIMIT = 16384
 T = TypeVar("T")
@@ -54,6 +55,7 @@ RETRIEVAL_OUTPUT_FIELDS = [
     "chunk_level",
     "chunk_idx",
     *CATALOG_METADATA_FIELDS,
+    *PROVENANCE_FIELDS,
 ]
 _CATALOG_SCHEMA_FIELDS = {
     "id",
@@ -220,6 +222,7 @@ def _format_retrieval_hit(hit: Mapping) -> dict:
         "index_version": entity.get("index_version", "v1"),
         "content_hash": content_hash,
         "score": float(distance),
+        **excel_provenance(entity),
     }
 
 

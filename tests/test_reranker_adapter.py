@@ -112,6 +112,53 @@ async def test_http_adapter_reuses_one_client_and_disables_transport_retries():
 
 
 @pytest.mark.asyncio
+async def test_qwen37_uses_dashscope_request_and_response_envelopes():
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "output": {
+                    "results": [{"index": 0, "relevance_score": 0.93}],
+                },
+                "request_id": "request-1",
+            },
+        )
+
+    factory, _, _ = _client_factory(handler)
+    adapter = HttpxRerankerAdapter(
+        endpoint=(
+            "https://maas.example.test/api/v1/services/rerank/text-rerank/text-rerank"
+        ),
+        model="qwen3.7-text-rerank",
+        api_key="secret",
+        policy=ProviderPolicy(max_attempts=1),
+        client_factory=factory,
+    )
+    try:
+        result = await adapter.rerank(
+            query="什么是文本排序模型",
+            documents=["文本排序模型会对候选文本排序"],
+            top_n=1,
+        )
+
+        assert json.loads(requests[0].content) == {
+            "model": "qwen3.7-text-rerank",
+            "input": {
+                "query": "什么是文本排序模型",
+                "documents": ["文本排序模型会对候选文本排序"],
+            },
+            "parameters": {"top_n": 1, "return_documents": False},
+        }
+        assert result.items[0].index == 0
+        assert result.items[0].score == 0.93
+    finally:
+        await adapter.aclose()
+
+
+@pytest.mark.asyncio
 async def test_retry_after_is_owned_by_provider_executor():
     calls = 0
     sleeps: list[float] = []

@@ -15,6 +15,8 @@ from langchain_community.document_loaders import (
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from backend.core.settings import get_settings
+from backend.indexing.excel_parser import parse_excel_rows
+from backend.indexing.excel_provenance import source_anchor
 
 # 编译非打印 C0/C1 控制字符的正则（保留常规排版字：\t, \n, \r）
 _CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -143,6 +145,9 @@ class DocumentLoader:
         level_2_overlap = max(200, chunk_overlap * 2)
         level_3_size = max(600, chunk_size)
         level_3_overlap = max(100, chunk_overlap)
+        self._excel_leaf_size = level_3_size
+        self._excel_parent_size = level_2_size
+        self._excel_root_size = level_1_size
 
         self._splitter_level_1 = RecursiveCharacterTextSplitter(
             chunk_size=level_1_size,
@@ -357,6 +362,68 @@ class DocumentLoader:
             documents.extend(page_chunks)
         return documents
 
+    def _load_excel(
+        self, file_path: str, filename: str, metadata: DocumentArtifactMetadata
+    ) -> list[dict]:
+        rows = parse_excel_rows(file_path, fragment_size=self._excel_leaf_size)
+        documents: list[dict] = []
+        counters = {1: 0, 2: 0, 3: 0}
+
+        def groups(items: list[dict], budget: int) -> list[list[dict]]:
+            result: list[list[dict]] = []
+            current: list[dict] = []
+            size = 0
+            for item in items:
+                if current and (
+                    item["sheet_name"] != current[0]["sheet_name"]
+                    or size + len(item["text"]) + 1 > budget
+                ):
+                    result.append(current)
+                    current, size = [], 0
+                current.append(item)
+                size += len(item["text"]) + 1
+            if current:
+                result.append(current)
+            return result
+
+        def make(items: list[dict], level: int, parent: str, root: str) -> dict:
+            text = "\n".join(item["text"] for item in items)
+            sheet = items[0]["sheet_name"]
+            start, end = items[0]["row_start"], items[-1]["row_end"]
+            chunk_id = self._build_chunk_id(
+                filename, 0, level, counters[level], metadata.document_version_id
+            )
+            counters[level] += 1
+            chunk = {
+                "filename": sanitize_text(filename),
+                "file_path": sanitize_text(file_path),
+                "file_type": "Excel",
+                "page_number": 0,
+                **self._artifact_metadata_for_page({}, metadata, 0),
+                "section_id": source_anchor(sheet, 1, 1).split(":row:")[0],
+                "text": text,
+                "chunk_id": chunk_id,
+                "parent_chunk_id": parent,
+                "root_chunk_id": root or chunk_id,
+                "chunk_level": level,
+                "chunk_idx": len(documents),
+                "content_hash": self._content_hash(text),
+                "sheet_name": sheet,
+                "row_start": start,
+                "row_end": end,
+                "source_anchor": source_anchor(sheet, start, end),
+            }
+            documents.append(chunk)
+            return chunk
+
+        for root_rows in groups(rows, self._excel_root_size):
+            root = make(root_rows, 1, "", "")
+            for parent_rows in groups(root_rows, self._excel_parent_size):
+                parent = make(parent_rows, 2, root["chunk_id"], root["chunk_id"])
+                for row in parent_rows:
+                    make([row], 3, parent["chunk_id"], root["chunk_id"])
+        return documents
+
     def load_document(
         self,
         file_path: str,
@@ -372,7 +439,9 @@ class DocumentLoader:
         elif file_lower.endswith((".docx", ".doc")):
             doc_type = "Word"
             loader = Docx2txtLoader(file_path)
-        elif file_lower.endswith((".xlsx", ".xls")):
+        elif file_lower.endswith(".xlsx"):
+            return self._load_excel(file_path, filename, metadata)
+        elif file_lower.endswith(".xls"):
             doc_type = "Excel"
             loader = UnstructuredExcelLoader(file_path)
         elif file_lower.endswith((".html", ".htm")):

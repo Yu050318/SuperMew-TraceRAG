@@ -10,6 +10,7 @@ const props = defineProps<{
   text: string;
   isUser: boolean;
   msgIndex?: number | null;
+  allowedCitationIds?: number[];
 }>();
 
 const emit = defineEmits<{
@@ -20,7 +21,7 @@ const parsedHtml = computed(() => {
   if (props.isUser) {
     return escapeHtml(props.text);
   }
-  return parseMarkdown(props.text, props.msgIndex);
+  return parseMarkdown(props.text, props.msgIndex, props.allowedCitationIds ?? []);
 });
 
 const onContentClick = (e: MouseEvent) => {
@@ -29,6 +30,7 @@ const onContentClick = (e: MouseEvent) => {
   const msgIndexStr = citeRef.getAttribute('data-msg-index');
   const chunkIndexStr = citeRef.getAttribute('data-chunk-index');
   if (msgIndexStr !== null && chunkIndexStr !== null) {
+    if (!props.allowedCitationIds?.includes(Number(chunkIndexStr))) return;
     emit('cite-click', Number(msgIndexStr), Number(chunkIndexStr));
   }
 };

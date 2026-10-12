@@ -11,6 +11,8 @@ from backend.indexing.embedding import (
     embedding_service as _default_embedding_service,
 )
 from backend.indexing.milvus_client import MilvusStore, get_milvus_store
+from backend.indexing.excel_provenance import PROVENANCE_FIELDS, excel_provenance
+from backend.security.milvus_filters import version_scope_filter
 
 if TYPE_CHECKING:
     from backend.indexing.milvus_client import IndexVersionVerification
@@ -211,6 +213,7 @@ class MilvusWriter:
             if not isinstance(document, Mapping):
                 raise ValueError("versioned documents must be mappings")
             normalized = dict(document)
+            normalized.update(excel_provenance(document))
             normalized["text"] = _required_string(document, "text")
             normalized["filename"] = _required_string(document, "filename")
             normalized["file_type"] = _required_string(document, "file_type")
@@ -291,6 +294,7 @@ class MilvusWriter:
                     "root_chunk_id": document.get("root_chunk_id", ""),
                     "chunk_level": int(document.get("chunk_level", 0) or 0),
                     **{field: document[field] for field in _VERSION_METADATA_FIELDS},
+                    **excel_provenance(document),
                 }
                 for document, dense_embedding in zip(batch, dense_embeddings)
             ]
@@ -314,6 +318,26 @@ class MilvusWriter:
             inserted_count=inserted_count,
             batch_count=batch_count,
         )
+
+    def verify_provenance(
+        self, receipt: IndexWriteReceipt, documents: list[dict]
+    ) -> None:
+        """Read back exact candidate metadata before Catalog can publish it."""
+        expected = {doc["chunk_id"]: excel_provenance(doc) for doc in documents}
+        rows = self._store_for_collection(receipt.collection_name).query_all(
+            version_scope_filter(
+                tenant_id=receipt.tenant_id,
+                knowledge_base_id=receipt.knowledge_base_id,
+                document_id=receipt.document_id,
+                document_version_ids=[receipt.document_version_id],
+                index_version=receipt.index_version,
+            ),
+            output_fields=["chunk_id", *PROVENANCE_FIELDS],
+            consistency_level="Strong",
+        )
+        actual = {row["chunk_id"]: excel_provenance(row) for row in rows}
+        if len(rows) != len(expected) or actual != expected:
+            raise RuntimeError("Milvus Excel provenance verification failed")
 
     def verify_receipt(self, receipt: IndexWriteReceipt) -> "IndexVersionVerification":
         store = self._store_for_collection(receipt.collection_name)

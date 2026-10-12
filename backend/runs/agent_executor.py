@@ -31,7 +31,11 @@ from backend.rag.checkpoint_runner import (
     ResumeAccessState,
     checkpointed_rag_runner,
 )
-from backend.rag.evidence import agent_evidence_character_budget, pack_evidence
+from backend.rag.evidence import (
+    agent_evidence_character_budget,
+    evidence_trace,
+    pack_evidence,
+)
 from backend.rag.outcomes import (
     partial_evidence_instruction,
     retrieval_user_message,
@@ -313,7 +317,11 @@ def _resume_answer_prompt(result: dict, answer: str) -> str | None:
     evidence = pack_evidence(
         docs,
         maximum_characters=agent_evidence_character_budget(),
+        question=str(result.get("original_question") or result.get("question") or "")
+        + "\n"
+        + answer,
     )
+    result["rag_trace"] = evidence_trace(result.get("rag_trace") or {}, evidence)
     original_question = result.get("original_question") or result.get("question") or ""
     evidence_instruction = partial_evidence_instruction(result)
     return (
@@ -536,8 +544,8 @@ class RunAgentExecutor:
                         kind="waiting_input",
                         fencing_token=rag_outcome.fencing_token,
                     )
-                trace = dict(rag_outcome.result.get("rag_trace") or {})
                 prompt = _resume_answer_prompt(rag_outcome.result, consumed.answer)
+                trace = dict(rag_outcome.result.get("rag_trace") or {})
                 if prompt is None:
                     return RunExecutionOutcome(
                         kind="completed",

@@ -21,6 +21,7 @@ venv/
 .env
 .env.*
 !.env.example
+docker-compose.override.yml
 
 # Runtime and Docker data
 volumes/

@@ -24,6 +24,12 @@ from backend.providers.core import (
 CancellationProbe = Callable[[], bool]
 AsyncClientFactory = Callable[..., httpx.AsyncClient]
 
+_DASHSCOPE_INPUT_MODELS = {
+    "qwen3.7-text-rerank",
+    "qwen3-vl-rerank",
+    "gte-rerank-v2",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class RerankItem:
@@ -234,19 +240,34 @@ class HttpxRerankerAdapter:
                 remaining = stage_deadline - self._clock()
                 if remaining <= 0:
                     raise ProviderError.deadline_exceeded(context)
+                payload: dict[str, Any]
+                if self.model in _DASHSCOPE_INPUT_MODELS:
+                    payload = {
+                        "model": self.model,
+                        "input": {
+                            "query": query,
+                            "documents": list(documents),
+                        },
+                        "parameters": {
+                            "top_n": bounded_top_n,
+                            "return_documents": False,
+                        },
+                    }
+                else:
+                    payload = {
+                        "model": self.model,
+                        "query": query,
+                        "documents": list(documents),
+                        "top_n": bounded_top_n,
+                        "return_documents": False,
+                    }
                 response = await self._client.post(
                     self.endpoint,
                     headers={
                         "Authorization": f"Bearer {self._api_key}",
                         "Content-Type": "application/json",
                     },
-                    json={
-                        "model": self.model,
-                        "query": query,
-                        "documents": list(documents),
-                        "top_n": bounded_top_n,
-                        "return_documents": False,
-                    },
+                    json=payload,
                     timeout=httpx.Timeout(remaining),
                 )
                 response.raise_for_status()
@@ -346,9 +367,12 @@ class HttpxRerankerAdapter:
             body: Any = response.json()
         except Exception as exc:
             raise self._invalid_response(context) from exc
-        if not isinstance(body, dict) or "results" not in body:
+        if not isinstance(body, dict):
             raise self._invalid_response(context)
-        results = body["results"]
+        result_container = body.get("output", body)
+        if not isinstance(result_container, dict) or "results" not in result_container:
+            raise self._invalid_response(context)
+        results = result_container["results"]
         if not isinstance(results, list) or not results or len(results) > top_n:
             raise self._invalid_response(context)
 

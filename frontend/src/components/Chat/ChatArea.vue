@@ -167,6 +167,9 @@ const scrollToBottom = () => {
 };
 
 const scrollToChunk = async (msgIndex: number, chunkIndex: number) => {
+  const trace = chatStore.messages[msgIndex]?.ragTrace;
+  const sources = trace?.evidence_chunks ?? trace?.retrieved_chunks ?? [];
+  if (!Number.isInteger(chunkIndex) || chunkIndex < 1 || chunkIndex > sources.length) return;
   const msgItem = messageItemRefs.value[msgIndex];
   if (!msgItem) return;
 

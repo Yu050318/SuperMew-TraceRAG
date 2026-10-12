@@ -85,6 +85,7 @@ import ExecutionTimeline from '@/components/Run/ExecutionTimeline.vue';
 import ArtifactShelf from '@/components/Artifacts/ArtifactShelf.vue';
 import type { RunTimelineItem } from '@/events/runEventReducer';
 import type { RetrievedChunk } from '@/types/chat';
+import { citationSources, sourceLocation as provenanceLocation } from '@/utils/ragSources';
 import emptyEvidence from '@/assets/images/empty-evidence.webp';
 
 interface RunStepView {
@@ -126,7 +127,7 @@ const latestMessage = computed(() => {
 });
 
 const trace = computed(() => latestMessage.value?.ragTrace || null);
-const sources = computed(() => trace.value?.retrieved_chunks || []);
+const sources = computed(() => citationSources(trace.value));
 const isRunning = computed(() =>
   Boolean(latestMessage.value?.isThinking || chatStore.isViewingStreamingThread)
 );
@@ -268,7 +269,7 @@ const formatRetrievalFunnel = (currentTrace: any) => {
 
 const sourceLocation = (source: RetrievedChunk, index: number) => {
   const parts: string[] = [];
-  if (source.page_number) parts.push('第 ' + source.page_number + ' 页');
+  parts.push(provenanceLocation(source));
   parts.push('RRF #' + (source.rrf_rank || index + 1));
   return parts.join(' · ');
 };
@@ -279,7 +280,7 @@ const formatScore = (score?: number | null) => {
 };
 
 const onSourceClick = (index: number) => {
-  if (latestMessageIndex.value < 0) return;
+  if (latestMessageIndex.value < 0 || index < 0 || index >= sources.value.length) return;
   emit('cite-click', latestMessageIndex.value, index + 1);
 };
 </script>

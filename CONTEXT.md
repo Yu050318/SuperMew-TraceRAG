@@ -52,6 +52,11 @@ _Avoid_: Run、BackgroundTask
 
 **Evidence**:
 带 Document Version、chunk、来源和内容哈希身份的可引用检索材料。
+RAG Trace 的 `retrieved_chunks` 是检索候选；`evidence_chunks` 是本次回答上下文实际入选的
+EvidencePack，数字引用仅对应其顺序；`cited_evidence_ids` 是回答实际引用的入选位置。
+Excel 父块的 `matched_leaf_sources` 只表示命中叶子，不等于父块正文覆盖的全部行。
+回答可保留无编号的父块理解上下文，并从同作用域真实命中叶子正文投影独立 Evidence；
+精确身份与正文哈希校验不代表事实蕴涵，缺少可靠叶子时保留显式父块级降级。
 _Avoid_: Context text、raw chunk
 
 **Web Source ID**:

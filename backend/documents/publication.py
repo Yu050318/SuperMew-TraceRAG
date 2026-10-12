@@ -25,6 +25,7 @@ from backend.documents.catalog import (
     UploadReservation,
 )
 from backend.indexing.document_loader import DocumentArtifactMetadata, DocumentLoader
+from backend.indexing.excel_provenance import excel_provenance
 from backend.indexing.milvus_client import MilvusSettings
 from backend.indexing.milvus_writer import (
     CATALOG_COLLECTION_SUFFIX,
@@ -85,19 +86,21 @@ class DocumentPublicationConfig:
         embedding_identity = (
             f"{settings.embedding.model}@{settings.embedding.revision}"
         )[:160]
-        return cls(
+        config = cls(
             tenant_id=os.getenv("DEFAULT_TENANT_ID", "default").strip() or "default",
             knowledge_base_name=(
                 os.getenv("DEFAULT_KNOWLEDGE_BASE_NAME", "默认知识库").strip()
                 or "默认知识库"
             ),
             parser_version=(
-                os.getenv("DOCUMENT_PARSER_VERSION", "document-loader-v2").strip()
-                or "document-loader-v2"
+                os.getenv("DOCUMENT_PARSER_VERSION", "document-loader-excel-v3").strip()
+                or "document-loader-excel-v3"
             ),
             chunker_version=(
-                os.getenv("DOCUMENT_CHUNKER_VERSION", "three-level-800-100-v2").strip()
-                or "three-level-800-100-v2"
+                os.getenv(
+                    "DOCUMENT_CHUNKER_VERSION", "three-level-excel-row-v3"
+                ).strip()
+                or "three-level-excel-row-v3"
             ),
             embedding_model=embedding_identity,
             index_version=(
@@ -108,6 +111,14 @@ class DocumentPublicationConfig:
             upload_dir=settings.storage.upload_dir,
             max_attempts=settings.worker.max_attempts,
         )
+        if (
+            config.parser_version != "document-loader-excel-v3"
+            or config.chunker_version != "three-level-excel-row-v3"
+        ):
+            raise ValueError(
+                "Installed Excel parser requires document-loader-excel-v3 / three-level-excel-row-v3; use a separate original checkout for A"
+            )
+        return config
 
     @property
     def build_profile(self) -> BuildProfile:
@@ -638,6 +649,9 @@ class DocumentPublication:
             self._guard_execution(job_id, execution)
             if not vector_verification.exact:
                 raise RuntimeError("Milvus exact verification failed")
+            if any(excel_provenance(doc) for doc in leaf_documents):
+                self.writer.verify_provenance(receipt, leaf_documents)
+                self._guard_execution(job_id, execution)
             manifest = [
                 *self._manifest(parent_documents, "parent"),
                 *self._manifest(leaf_documents, "vector"),

@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia';
+import { validateRagTraceSources } from '@/utils/ragSources';
 import { watch, type WatchStopHandle } from 'vue';
 import { useAuthStore } from './auth';
 import { useThreadStore } from './threads';
@@ -227,7 +228,7 @@ export const useChatStore = defineStore('chat', {
 
     mapServerMessages(messages: ThreadMessage[]): Message[] {
       return (messages || []).map((message) => {
-        const ragTrace = message.rag_trace || null;
+        const ragTrace = validateRagTraceSources(message.rag_trace || null);
         const isUser = message.role === 'user';
 
         return {

@@ -5,7 +5,35 @@ from backend.tools.knowledge import _render_rag_result
 
 
 class KnowledgeToolOutcomeTests(unittest.TestCase):
+    def test_clarification_does_not_publish_candidate_rank_as_answer_citation(self):
+        context = RunRequestContext.for_sync(user_id="alice", thread_id="thread-1")
+        try:
+            rendered = _render_rag_result(
+                context,
+                {
+                    "rag_trace": {
+                        "route": "clarify",
+                        "hitl_prompt": "请确认版本 [4]",
+                        "retrieved_chunks": [],
+                    }
+                },
+            )
+            self.assertIn("NEEDS_CLARIFICATION", rendered)
+            self.assertEqual(context.take_rag_trace()["rag_trace"]["evidence_chunks"], [])
+        finally:
+            context.close()
+
     def _render(self, result: dict) -> str:
+        # Tool production inputs follow ADR-0015's versioned chunk contract.
+        for doc in result.get("docs", []):
+            doc.update(
+                chunk_id="v1::guide.md::p1::l3::0",
+                document_id="d1",
+                document_version_id="v1",
+                section_id="p1",
+                index_version="index-v1",
+                content_hash="a" * 64,
+            )
         context = RunRequestContext.for_sync(user_id="alice", thread_id="thread-1")
         try:
             return _render_rag_result(context, result)

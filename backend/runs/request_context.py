@@ -137,6 +137,17 @@ class RunRequestContext:
                 self._rag_retrieval_snapshot = resolver()
             return self._rag_retrieval_snapshot
 
+    def restore_rag_retrieval_snapshot(self, snapshot: object) -> None:
+        with self._lock:
+            if not self._active:
+                raise RuntimeError("request context is closed")
+            if (
+                self._rag_retrieval_snapshot is not None
+                and self._rag_retrieval_snapshot != snapshot
+            ):
+                raise ValueError("cannot replace the frozen retrieval snapshot")
+            self._rag_retrieval_snapshot = snapshot
+
     def emit_rag_step(
         self,
         icon: str,

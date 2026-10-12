@@ -5,9 +5,14 @@ from dataclasses import dataclass
 import hashlib
 import json
 from threading import RLock
+from typing import Any
 
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.language_models import LanguageModelInput
+from langchain_core.runnables import Runnable, RunnableLambda
+from langchain_openai import ChatOpenAI
+from pydantic import BaseModel
 
 from backend.core.errors import AppError, ErrorCode
 from backend.core.settings import AppSettings, get_settings
@@ -53,6 +58,39 @@ class ModelSpec:
 ModelInitializer = Callable[..., BaseChatModel]
 
 
+def _require_structured_output(value: Any) -> Any:
+    if isinstance(value, dict) and "parsed" in value and "parsing_error" in value:
+        if value["parsing_error"] is not None:
+            raise value["parsing_error"]
+        if value["parsed"] is None:
+            raise ValueError("Provider returned no structured output")
+    if value is None:
+        raise ValueError("Provider returned no structured output")
+    return value
+
+
+class DeepSeekStructuredChatOpenAI(ChatOpenAI):
+    """The existing OpenAI client, with a request-local structured protocol."""
+
+    def with_structured_output(
+        self,
+        schema: dict[str, Any] | type[BaseModel] | None = None,
+        *,
+        method: str = "function_calling",
+        **kwargs: Any,
+    ) -> Runnable[LanguageModelInput, Any]:
+        if method != "function_calling":
+            raise ValueError(
+                "Selected profile requires function_calling structured output"
+            )
+        structured = (
+            super()
+            .with_structured_output(schema, method="function_calling", **kwargs)
+            .bind(extra_body={"thinking": {"type": "disabled"}})
+        )
+        return structured | RunnableLambda(_require_structured_output)
+
+
 class ModelRegistry:
     """Build model clients from immutable, non-secret Model Snapshots."""
 
@@ -64,6 +102,10 @@ class ModelRegistry:
     ) -> None:
         self.settings = settings or get_settings()
         self.initializer = initializer
+        # Deployment policy is pinned to immutable profile identity and version.
+        self._structured_output_policies = dict(
+            self.settings.models.structured_output_policies
+        )
         self._environment_snapshot = self._build_environment_snapshot()
         self._models: dict[tuple[object, ...], BaseChatModel] = {}
         self._lock = RLock()
@@ -191,9 +233,8 @@ class ModelRegistry:
             cached = self._models.get(spec.cache_key)
             if cached is not None:
                 return cached
-            model = self.initializer(
+            options = dict(
                 model=spec.name,
-                model_provider=spec.provider,
                 api_key=api_key,
                 base_url=spec.base_url,
                 temperature=spec.temperature,
@@ -201,6 +242,15 @@ class ModelRegistry:
                 max_retries=0,
                 timeout=spec.timeout_seconds,
             )
+            policy_key = f"{spec.profile_id}:{spec.profile_version}"
+            if policy_key in self._structured_output_policies:
+                if spec.provider != "openai":
+                    raise ValueError(
+                        "DeepSeek structured policy requires OpenAI-compatible provider"
+                    )
+                model = DeepSeekStructuredChatOpenAI(**options)
+            else:
+                model = self.initializer(model_provider=spec.provider, **options)
             self._models[spec.cache_key] = model
             return model
 

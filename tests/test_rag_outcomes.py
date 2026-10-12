@@ -39,6 +39,12 @@ class RagOutcomePresentationTests(unittest.TestCase):
                     "filename": "guide.md",
                     "page_number": 1,
                     "text": "方案 A 的证据",
+                    "chunk_id": "v1::guide.md::p1::l3::0",
+                    "document_id": "d1",
+                    "document_version_id": "v1",
+                    "section_id": "p1",
+                    "index_version": "index-v1",
+                    "content_hash": "a" * 64,
                 }
             ],
             "retrieval_status": "partial",
@@ -54,6 +60,10 @@ class RagOutcomePresentationTests(unittest.TestCase):
         self.assertIn("未覆盖子问题：方案 B 的限制", instruction)
         self.assertIn("必须明确披露未覆盖范围", prompt)
         self.assertIn("方案 B 的限制", prompt)
+        self.assertEqual(
+            result["rag_trace"]["evidence_chunks"][0]["chunk_id"],
+            result["docs"][0]["chunk_id"],
+        )
 
 
 if __name__ == "__main__":

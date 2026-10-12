@@ -17,6 +17,7 @@ from backend.indexing.milvus_client import (
 )
 from backend.indexing.embedding import embedding_service as _embedding_service
 from backend.indexing.parent_chunk_store import ParentChunkStore
+from backend.indexing.excel_provenance import matched_leaf_sources
 from backend.providers import (
     EmbeddingScope,
     ProviderCallContext,
@@ -28,6 +29,7 @@ from backend.providers import (
 )
 from backend.providers.runtime import provider_runtime
 from backend.rag.reranking import RerankStage
+from backend.rag.evidence import citation_leaves
 from pydantic import BaseModel, Field
 from backend.agent.models import ModelRole, model_registry
 from backend.model_control import ModelCatalogSnapshot
@@ -279,6 +281,8 @@ def _parent_matches_child_scope(parent: dict, child: dict) -> bool:
         return False
     if parent.get("filename") != child.get("filename"):
         return False
+    if parent.get("acl_tags", []) != child.get("acl_tags", []):
+        return False
     for field in (
         "tenant_id",
         "knowledge_base_id",
@@ -355,6 +359,29 @@ def _merge_to_parent_level(
         _merge_rank_score_into(parent_doc, doc)
         parent_doc["merged_from_children"] = True
         parent_doc["merged_child_count"] = len(groups[parent_id])
+        sources, truncated = matched_leaf_sources(groups[parent_id])
+        if sources:
+            parent_doc["matched_leaf_sources"] = sources
+            parent_doc["matched_leaf_sources_truncated"] = truncated
+            raw_leaves = []
+            for child in groups[parent_id]:
+                raw_leaves.extend(
+                    child.get("_citation_leaves")
+                    or ([child] if child.get("chunk_level") == 3 else [])
+                )
+            allowed_ids = {source["chunk_id"] for source in sources}
+            by_id = {
+                leaf["chunk_id"]: leaf
+                for leaf in raw_leaves
+                if leaf.get("chunk_id") in allowed_ids
+            }
+            parent_doc["_citation_leaves"] = list(by_id.values())[:32]
+            parent_doc["_citation_leaves"] = citation_leaves(parent_doc)
+            parent_doc["_citation_leaves_incomplete"] = len(
+                parent_doc["_citation_leaves"]
+            ) != len(sources) or any(
+                child.get("_citation_leaves_incomplete") for child in groups[parent_id]
+            )
         parent_slot[parent_id] = len(merged_docs)
         merged_docs.append(parent_doc)
         merged_count += 1
@@ -427,6 +454,28 @@ def dedupe_documents(docs: List[dict]) -> List[dict]:
             order.append(key)
             continue
         _merge_rank_score_into(by_key[key], item)
+        sources, truncated = matched_leaf_sources([by_key[key], item])
+        # A repeated L3 hit remains a direct row source. Only parents carry
+        # matched_leaf_sources; attaching them to a leaf violates the contract.
+        if sources and by_key[key].get("chunk_level") in (1, 2):
+            by_key[key]["matched_leaf_sources"] = sources
+            by_key[key]["matched_leaf_sources_truncated"] = truncated
+            leaves = [
+                *by_key[key].get("_citation_leaves", []),
+                *item.get("_citation_leaves", []),
+            ]
+            allowed_ids = {source["chunk_id"] for source in sources}
+            by_key[key]["_citation_leaves"] = list(
+                {
+                    leaf["chunk_id"]: leaf
+                    for leaf in leaves
+                    if leaf["chunk_id"] in allowed_ids
+                }.values()
+            )[:32]
+            by_key[key]["_citation_leaves"] = citation_leaves(by_key[key])
+            by_key[key]["_citation_leaves_incomplete"] = len(
+                by_key[key]["_citation_leaves"]
+            ) != len(sources)
     return [by_key[key] for key in order]
 
 

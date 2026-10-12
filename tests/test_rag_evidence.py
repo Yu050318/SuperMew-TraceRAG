@@ -17,6 +17,12 @@ def _doc(name: str, text: str) -> dict:
         "filename": name,
         "page_number": 1,
         "text": text,
+        "chunk_id": f"v1::{name}::p1::l3::0",
+        "document_id": name,
+        "document_version_id": "v1",
+        "section_id": "p1",
+        "index_version": "index-v1",
+        "content_hash": "a" * 64,
     }
 
 

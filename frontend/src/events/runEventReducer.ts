@@ -1,4 +1,5 @@
 import type { RunEventType, RunEventV1 } from '@/types/generated/run-event-v1';
+import { validateRagTraceSources } from '@/utils/ragSources';
 import {
   normalizePublicErrorInfo,
   publicErrorMessage,
@@ -431,6 +432,7 @@ export function applyRunEvent(state: RunEventState, event: RuntimeRunEvent): Run
       next.messageText = String(data.content ?? next.messageText);
       next.messageStatus = String(data.status ?? 'completed');
       next.ragTrace = asRecord(data.rag_trace);
+      validateRagTraceSources(next.ragTrace);
       break;
     case 'hitl.required':
       next.messageText = '';

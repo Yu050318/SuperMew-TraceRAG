@@ -42,6 +42,24 @@ class ApplicationSettings(_EnvSettings):
 
 
 class ModelSettings(_EnvSettings):
+    structured_output_policies: dict[str, Literal["deepseek_function_calling"]] = Field(
+        default_factory=dict,
+        validation_alias="MODEL_STRUCTURED_OUTPUT_POLICIES",
+    )
+
+    @field_validator("structured_output_policies")
+    @classmethod
+    def validate_structured_output_profiles(
+        cls, value: dict[str, Literal["deepseek_function_calling"]]
+    ) -> dict[str, Literal["deepseek_function_calling"]]:
+        if any(
+            not re.fullmatch(r"model_[a-f0-9]{32}:[1-9][0-9]*", key) for key in value
+        ):
+            raise ValueError(
+                "structured output policy requires exact profile_id:version"
+            )
+        return value
+
     api_key: SecretStr = Field(default=SecretStr(""), validation_alias="ARK_API_KEY")
     base_url: str = Field(default="", validation_alias="BASE_URL")
     answer_model: str = Field(default="", validation_alias="MODEL")
@@ -251,7 +269,11 @@ class RerankSettings(_EnvSettings):
         if not self.enabled:
             return ""
         host = self.binding_host.strip().rstrip("/")
-        return host if host.endswith("/v1/rerank") else f"{host}/v1/rerank"
+        if host.endswith(
+            "/api/v1/services/rerank/text-rerank/text-rerank"
+        ) or host.endswith("/v1/rerank"):
+            return host
+        return f"{host}/v1/rerank"
 
 
 class RunSettings(_EnvSettings):
