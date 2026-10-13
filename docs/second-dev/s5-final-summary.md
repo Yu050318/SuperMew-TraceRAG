@@ -195,7 +195,8 @@ S4-C 没有独立正式交付报告，不虚构额外阶段。历史总计划部
 
 ### A. Python后端开发岗位
 
-**SuperMew-TraceRAG｜企业知识库可溯源问答系统（二次开发）**  
+**SuperMew-TraceRAG｜企业知识库可溯源问答系统（二次开发）**
+
 基于开源SuperMew，面向产品Excel与售后政策增强版本化索引、来源契约及持久评测；技术栈Python、FastAPI、PostgreSQL、Redis、Milvus、LangGraph。
 
 - 基于openpyxl实现多Sheet行语义解析与三级分块，保留表头/单位/物理行；复用Indexing Worker与Document Version发布，真实核验700个Excel叶子来源。
@@ -205,7 +206,8 @@ S4-C 没有独立正式交付报告，不虚构额外阶段。历史总计划部
 
 ### B. AI应用开发岗位
 
-**SuperMew-TraceRAG｜Excel证据可追溯Agentic RAG（二次开发）**  
+**SuperMew-TraceRAG｜Excel证据可追溯Agentic RAG（二次开发）**
+
 在SuperMew原有LangGraph/Hybrid Retrieval基础上，面向表格与跨文档场景增强证据表示、精准引用、模型兼容和可复现评估。
 
 - 实现表头与数据行绑定的XLSX表示，结合原Dense/BM25/RRF与Parent Merge保存真实Sheet/Row/source_anchor，避免将文本页码冒充表格行号。
